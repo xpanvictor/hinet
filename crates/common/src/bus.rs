@@ -1,32 +1,36 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use tokio::sync::broadcast;
+use tokio::io::AsyncReadExt;
+use tokio::sync::{broadcast, RwLock};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 /// MsgBus: should allow services register for certain events
 /// Publishes those events to all subscribers
 /// Minimizes and centralizes events for now
 pub struct MsgBus {
-    subscribers: HashMap<TypeId, Box<dyn Any + Send>>,
+    inner_bus: InnerBus
 }
 
+struct InnerBus {
+    subscribers: RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
+}
 impl MsgBus {
     pub fn new() -> Self {
         MsgBus {
-            subscribers: HashMap::new(),
+            inner_bus: InnerBus {subscribers: RwLock::new(HashMap::new())}
         }
     }
 
-    pub fn register<T: Send + 'static + std::clone::Clone>(&mut self) -> Receiver<T> {
+    pub async fn subscribe<T: Send + Clone + Sync + 'static>(&self) -> Receiver<T> {
         let type_id = TypeId::of::<T>();
 
-        if !self.subscribers.contains_key(&type_id) {
+        let mut inner = self.inner_bus.subscribers.write().await;
+        if !inner.contains_key(&type_id) {
             let (tx, _rx) = broadcast::channel::<T>(1024); // todo: use settings conf
-            self.subscribers.insert(type_id, Box::new(tx));
+            inner.insert(type_id, Box::new(tx));
         }
 
-        let sender = self
-            .subscribers
+        let sender = inner
             .get(&type_id)
             .unwrap()
             .downcast_ref::<Sender<T>>()
@@ -34,9 +38,10 @@ impl MsgBus {
         sender.subscribe()
     }
 
-    pub fn send<T: Any + Send>(&mut self, msg: T) {
+    pub async fn publish<T: Any + Send>(&self, msg: T) {
         let type_id = TypeId::of::<T>();
-        if let Some(tx) = self.subscribers.get(&type_id) {
+        let inner = self.inner_bus.subscribers.read().await;
+        if let Some(tx) = inner.get(&type_id) {
             let sender = tx.downcast_ref::<Sender<T>>().unwrap();
             let _ = sender.send(msg);
         } else {

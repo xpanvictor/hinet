@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 # system
 common = {path = "../../crates/common"}
+net = {path = "../../crates/net"}
 
 # external
 tokio = { version = "1", features = ["full"] }

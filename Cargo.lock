@@ -36,14 +36,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
-name = "bus"
-version = "0.1.0"
-dependencies = [
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "bytes"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,6 +60,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "tokio",
+ "tracing",
  "tracing-subscriber",
 ]
 
@@ -141,6 +134,11 @@ dependencies = [
 [[package]]
 name = "net"
 version = "0.1.0"
+dependencies = [
+ "common",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "nu-ansi-term"
@@ -243,6 +241,7 @@ dependencies = [
  "anyhow",
  "common",
  "metrics",
+ "net",
  "tokio",
  "tracing",
  "tracing-subscriber",
