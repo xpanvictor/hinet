@@ -2,7 +2,7 @@ use root;
 
 #[tokio::main]
 async fn main() {
-    println!("Hello, world!");
+    println!("System initialize..");
     let rt = root::runtime::Runtime::run();
     match rt.await {
         Ok(_) => {println!("stable run")}

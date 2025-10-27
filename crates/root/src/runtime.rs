@@ -32,10 +32,10 @@ impl Runtime {
         let mut rx = msg_bus.subscribe::<&str>().await;
         select! {
             _ = tokio::signal::ctrl_c() => {
-                tracing::info!("system received SIGINT");
+                tracing::debug!("system received SIGINT");
             },
             resp = rx.recv() => {tracing::info!("got msg: {:?}", resp)}
-            _ = shutdown_rx.recv() => {tracing::info!("received shutdown signal")},
+            _ = shutdown_rx.recv() => {tracing::debug!("received shutdown signal")},
         }
         let _ = shutdown_tx.send(());
         let _ = tokio::join!(

@@ -38,7 +38,10 @@ impl Network {
             let bus = this.msg_bus.clone();
 
             select! {
-                _ = shutdown.recv() => {tracing::info!("received shutdown signal")},
+                _ = shutdown.recv() => {
+                    tracing::debug!("network listener rec shutdown signal");
+                    break;
+                },
                 accept_rs = listener.accept() => {
                     let (socket, addr) = match accept_rs {
                         Ok((stream, addr)) => {
@@ -83,8 +86,8 @@ impl Network {
         let mut rx = bus.subscribe::<NetSendMsg>().await;
         select! {
             _ = shutdown.recv() => {
-                tracing::info!("stopping outgoing msgs");
-                Ok(())
+                tracing::debug!("stopping outgoing msgs");
+                return Ok(());
             },
             msg = rx.recv() => {
                 // spawn a new thread to handle this
@@ -106,17 +109,23 @@ impl Network {
 
 impl Service for Network {
     async fn run(mut self, mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
-        let srx_listener = shutdown_rx.resubscribe();
+        let this = Arc::new(self);
+        let bus = this.msg_bus.clone();
         let listener_handle = tokio::spawn(Network::listen(
-            Arc::new(self),
-            srx_listener,
-            "localhost:5052"
+            this.clone(),
+            shutdown_rx.resubscribe(),
+            "0.0.0.0:5052"
+        ));
+        let sender_handle = tokio::spawn(Network::handle_msg(
+            this.clone(),
+            bus.clone(),
+            shutdown_rx.resubscribe()
         ));
         select! {
             _ = shutdown_rx.recv() => {
-                tracing::info!("network shutdown");
+                tracing::debug!("network shutdown");
             }
         }
-        let _ = join!(listener_handle);
+        let _ = join!(listener_handle, sender_handle);
     }
 }
