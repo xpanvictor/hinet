@@ -16,7 +16,7 @@ impl Runtime {
     pub async fn run() -> anyhow::Result<()> {
         // basic tracing conf
         common::tracing::init_tracing()?;
-        let mut msg_bus = Arc::new(MsgBus::new());
+        let msg_bus = Arc::new(MsgBus::new());
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
 
         // instantiate services
@@ -34,9 +34,7 @@ impl Runtime {
             _ = tokio::signal::ctrl_c() => {
                 tracing::info!("system received SIGINT");
             },
-            resp = rx.recv() => {
-                tracing::info!("got msg: {:?}", resp)
-            }
+            resp = rx.recv() => {tracing::info!("got msg: {:?}", resp)}
             _ = shutdown_rx.recv() => {tracing::info!("received shutdown signal")},
         }
         let _ = shutdown_tx.send(());

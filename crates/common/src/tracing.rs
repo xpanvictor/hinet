@@ -8,7 +8,7 @@ pub fn init_tracing() -> Result<(), Error> {
         .with_target(false)
         .with_level(true);
 
-    let fmt_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let fmt_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,debug"));
 
     tracing_subscriber::registry()
         .with(fmt_layer)
