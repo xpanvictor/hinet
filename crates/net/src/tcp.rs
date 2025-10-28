@@ -1,17 +1,18 @@
-use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use bytes::Bytes;
+use common::MsgBus;
+use common::service::Service;
+use futures::{SinkExt, StreamExt};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
-use tokio::{join, select, spawn};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::broadcast::Receiver;
+use tokio::time::sleep;
+use tokio::{join, select, spawn};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use futures::{SinkExt, StreamExt};
-use common::MsgBus;
-use common::service::Service;
-use bytes::Bytes;
 
-pub struct Network{
+pub struct Network {
     msg_bus: Arc<MsgBus>,
 }
 
@@ -27,15 +28,14 @@ pub struct NetSendMsg {
 
 impl Network {
     pub fn new(msg_bus: Arc<MsgBus>) -> Network {
-        Network{
-            msg_bus
-        }
+        Network { msg_bus }
     }
 
     async fn listen(this: Arc<Self>, mut shutdown: Receiver<()>, address: impl ToSocketAddrs) {
         let listener = TcpListener::bind(address).await.unwrap();
         loop {
             let bus = this.msg_bus.clone();
+            tracing::info!("tcp network listening to peers on {:?}", listener.local_addr().unwrap());
 
             select! {
                 _ = shutdown.recv() => {
@@ -63,7 +63,11 @@ impl Network {
         }
     }
 
-    async fn handle_conn(socket: TcpStream, addr: SocketAddr, bus: Arc<MsgBus>) -> anyhow::Result<()> {
+    async fn handle_conn(
+        socket: TcpStream,
+        addr: SocketAddr,
+        bus: Arc<MsgBus>,
+    ) -> anyhow::Result<()> {
         // use length delimited codec
         let mut framed = Framed::new(socket, LengthDelimitedCodec::new());
         while let Some(frame) = framed.next().await {
@@ -71,7 +75,7 @@ impl Network {
                 Ok(bytes) => {
                     let msg = bytes.to_vec();
                     tracing::info!("received {} bytes from {}", msg.len(), addr);
-                    bus.publish(MsgReceived{ msg }).await;
+                    bus.publish(MsgReceived { msg }).await;
                 }
                 Err(e) => {
                     tracing::warn!("error reading from socket: {}", e);
@@ -82,7 +86,11 @@ impl Network {
         Ok(())
     }
 
-    async fn handle_msg(this: Arc<Self>, bus: Arc<MsgBus>, mut shutdown: Receiver<()>) -> anyhow::Result<()> {
+    async fn handle_msg(
+        this: Arc<Self>,
+        bus: Arc<MsgBus>,
+        mut shutdown: Receiver<()>,
+    ) -> anyhow::Result<()> {
         let mut rx = bus.subscribe::<NetSendMsg>().await;
         select! {
             _ = shutdown.recv() => {
@@ -90,6 +98,8 @@ impl Network {
                 return Ok(());
             },
             msg = rx.recv() => {
+
+                tracing::debug!("attempt recv");
                 // spawn a new thread to handle this
                 spawn(async move {
                     if let Ok(msg) = msg {
@@ -98,7 +108,11 @@ impl Network {
                             if let Err(e) = framed.send(msg.msg).await {
                                 tracing::warn!("error sending message: {}", e);
                             }
+                        } else{
+                            tracing::warn!("could not connect to {}", msg.addr);
                         };
+                    } else {
+                        tracing::warn!("error checking to send message");
                     }
                 });
                 Ok(())
@@ -114,18 +128,19 @@ impl Service for Network {
         let listener_handle = tokio::spawn(Network::listen(
             this.clone(),
             shutdown_rx.resubscribe(),
-            "0.0.0.0:5052"
+            "0.0.0.0:5052",
         ));
         let sender_handle = tokio::spawn(Network::handle_msg(
             this.clone(),
             bus.clone(),
-            shutdown_rx.resubscribe()
+            shutdown_rx.resubscribe(),
         ));
         select! {
             _ = shutdown_rx.recv() => {
                 tracing::debug!("network shutdown");
             }
         }
+
         let _ = join!(listener_handle, sender_handle);
     }
 }

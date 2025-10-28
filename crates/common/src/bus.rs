@@ -1,14 +1,14 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use tokio::io::AsyncReadExt;
-use tokio::sync::{broadcast, RwLock};
 use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::{RwLock, broadcast};
 
 /// MsgBus: should allow services register for certain events
 /// Publishes those events to all subscribers
 /// Minimizes and centralizes events for now
 pub struct MsgBus {
-    inner_bus: InnerBus
+    inner_bus: InnerBus,
 }
 
 struct InnerBus {
@@ -17,7 +17,9 @@ struct InnerBus {
 impl MsgBus {
     pub fn new() -> Self {
         MsgBus {
-            inner_bus: InnerBus {subscribers: RwLock::new(HashMap::new())}
+            inner_bus: InnerBus {
+                subscribers: RwLock::new(HashMap::new()),
+            },
         }
     }
 

@@ -1,13 +1,13 @@
+use crate::metrics::Metrics;
+use anyhow;
+use common::MsgBus;
+use common::service::Service;
+use metrics::counter;
+use net::TcpNetwork;
 use std::sync::{Arc, RwLock};
 use tokio;
-use anyhow;
 use tokio::select;
 use tracing::instrument;
-use metrics::counter;
-use crate::metrics::Metrics;
-use common::{MsgBus};
-use common::service::Service;
-use net::TcpNetwork;
 
 pub struct Runtime;
 
@@ -38,9 +38,7 @@ impl Runtime {
             _ = shutdown_rx.recv() => {tracing::debug!("received shutdown signal")},
         }
         let _ = shutdown_tx.send(());
-        let _ = tokio::join!(
-            net_handle
-        );
+        let _ = tokio::join!(net_handle);
         Ok(())
     }
 }
