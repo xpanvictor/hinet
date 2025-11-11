@@ -4,7 +4,7 @@ use common::MsgBus;
 use common::service::Service;
 use metrics::counter;
 use net::TcpNetwork;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio;
 use tokio::select;
 use tracing::instrument;

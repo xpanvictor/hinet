@@ -1,9 +1,9 @@
-use root;
+use root::runtime;
 
 #[tokio::main]
 async fn main() {
     println!("System initialize..");
-    let rt = root::runtime::Runtime::run();
+    let rt = runtime::Runtime::run();
     match rt.await {
         Ok(_) => {
             println!("stable run")

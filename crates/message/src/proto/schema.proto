@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package message;
+
+enum MsgStatus {
+  SENT = 0;
+  DELIVERED = 1;
+  READ = 2;
+  DELETED = 3;
+}
+
+message Msg {
+  string content = 1;
+  string sender_id = 2;
+  uint32 created_at = 3;
+  MsgStatus status = 4;
+}
+
