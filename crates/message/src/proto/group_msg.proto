@@ -1,0 +1,12 @@
+syntax = "proto3"; 
+
+package chat_group;
+
+message GroupMessage {
+  string group_id = 1;
+  string sender = 2;        // PeerId
+  string message_id = 3;
+  uint64 timestamp = 4;
+  uint64 seq_no = 5;        // critical for dedup / ordering
+  bytes content = 6;        // encrypted group payload
+}

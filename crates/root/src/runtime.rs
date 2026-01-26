@@ -13,7 +13,7 @@ pub struct Runtime;
 
 impl Runtime {
     #[instrument]
-    pub async fn run() -> anyhow::Result<()> {
+    pub async fn run() -> anyhow::Result<Arc<MsgBus>> {
         // basic tracing conf
         common::tracing::init_tracing()?;
         let msg_bus = Arc::new(MsgBus::new());
@@ -39,6 +39,6 @@ impl Runtime {
         }
         let _ = shutdown_tx.send(());
         let _ = tokio::join!(net_handle);
-        Ok(())
+        Ok(msg_bus.clone())
     }
 }

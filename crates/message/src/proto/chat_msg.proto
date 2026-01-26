@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package chat_dm;
+
+message DirectMessage {
+  string id = 1;
+  uint64 timestamp = 2;
+
+  oneof payload {
+    Text text = 10;
+    Delivered delivered = 11;
+    Read read = 12;
+    Typing typing = 13;
+  }
+}
+
+message Text {
+  bytes content = 1; // encrypted payload
+}
+
+message Delivered {
+  string message_id = 1;
+}
+
+message Read {
+  string message_id = 1;
+}
+
+message Typing {
+  bool is_typing = 1;
+}
+
+message DirectMessageResponse {
+  oneof result {
+    Ack ack = 1;
+    Error error = 2;
+  }
+}
+
+message Ack {
+  string message_id = 1;
+}
+
+message Error {
+  string message = 1;
+}
+
+
