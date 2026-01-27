@@ -1,9 +1,25 @@
-use std::sync::Arc;
+use std::{
+    default,
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::Arc,
+    time::Duration,
+};
 
 use common::{MsgBus, service::Service};
-use libp2p::{Swarm, core::upgrade::Version, identity::Keypair, noise, tcp, yamux};
+use libp2p::{
+    PeerId, Swarm, Transport, autonat,
+    core::upgrade::Version,
+    dcutr, gossipsub, identify,
+    identity::Keypair,
+    kad,
+    mdns::{self},
+    noise, ping,
+    relay::{self},
+    request_response, swarm, tcp, yamux,
+};
+use message::pb::chat_dm::direct_message;
 
-use crate::behavior::MsgBehaviour;
+use crate::behavior::{self, DmProtobufCodec, MsgBehaviour};
 
 pub struct P2PSwarm {
     msg_bus: Arc<MsgBus>,
@@ -14,20 +30,68 @@ impl P2PSwarm {
     pub fn new(identity: Keypair, msg_bus: Arc<MsgBus>) -> Self {
         P2PSwarm {
             msg_bus,
-            swarm: P2PSwarm::build_swarm(identity),
+            swarm: P2PSwarm::build_swarm(identity).unwrap(),
         }
     }
 
-    fn build_swarm(identity: Keypair) -> Swarm<MsgBehaviour> {
+    fn build_swarm(kp: Keypair) -> anyhow::Result<Swarm<MsgBehaviour>> {
+        let peer_id = PeerId::from_public_key(&kp.public());
+
         let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default());
         let mux = yamux::Config::default();
-        let noise = noise::Config::new(&identity);
+        let noise = noise::Config::new(&kp);
+        let (relay_transport, relay_client) = relay::client::new(peer_id);
         let transport = tcp_transport
+            .or_transport(relay_transport)
             .upgrade(Version::V1)
             .authenticate(noise)
             .multiplex(mux);
 
-        sw
+        let identify = identify::Behaviour::new(identify::Config::new(
+            "/messaging/1.0.0".into(), // todo: standard protocol versions
+            kp.public(),
+        ));
+        let kad = kad::Behaviour::new(peer_id, kad::store::MemoryStore::new(peer_id));
+        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)
+            .expect("couldn't create mdns node");
+
+        let dm_protocol = std::iter::once((
+            StreamProtocol::new("/messaging/dm/1.0.0"),
+            request_response::ProtocolSupport::Full,
+        ));
+        let direct_message =
+            request_response::Behaviour::new([dm_protocol], request_response::Config::default());
+        let gc_fn = |message: &gossipsub::Message| {
+            let mut s = DefaultHasher::new();
+            message.data.hash(&mut s);
+            gossipsub::MessageId::from(s.finish().to_string())
+        };
+        let gossipsub_config = gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(Duration::from_secs(10))
+            .validation_mode(gossipsub::ValidationMode::Strict)
+            .message_id_fn(gc_fn)
+            .build()
+            .expect("cant sub config");
+        let group_chat =
+            gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Signed(kp), gossipsub_config)
+                .expect("err gc");
+
+        let ping = ping::Behaviour::new(ping::Config::default());
+        let nat = autonat::Behaviour::new(peer_id, autonat::Config::default());
+        let dcutr = dcutr::Behaviour::new(peer_id);
+
+        let behavior = MsgBehaviour {
+            identify,
+            direct_message,
+            group_chat,
+            kad,
+            mdns,
+            ping,
+            nat,
+            dcutr,
+            relay_client: relay::Behaviour::new(peer_id, relay::Config::default()),
+        };
+        todo!()
     }
 }
 

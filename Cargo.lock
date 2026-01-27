@@ -2147,10 +2147,12 @@ name = "net"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "common",
  "futures",
  "libp2p",
+ "message",
  "tokio",
  "tokio-util",
  "tracing",
