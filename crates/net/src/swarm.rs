@@ -7,7 +7,7 @@ use std::{
 
 use common::{MsgBus, service::Service};
 use libp2p::{
-    PeerId, Swarm, Transport, autonat,
+    PeerId, StreamProtocol, Swarm, Transport, autonat,
     core::upgrade::Version,
     dcutr, gossipsub, identify,
     identity::Keypair,
@@ -39,7 +39,7 @@ impl P2PSwarm {
 
         let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default());
         let mux = yamux::Config::default();
-        let noise = noise::Config::new(&kp);
+        let noise = noise::Config::new(&kp).expect("noise error");
         let (relay_transport, relay_client) = relay::client::new(peer_id);
         let transport = tcp_transport
             .or_transport(relay_transport)
@@ -60,7 +60,7 @@ impl P2PSwarm {
             request_response::ProtocolSupport::Full,
         ));
         let direct_message =
-            request_response::Behaviour::new([dm_protocol], request_response::Config::default());
+            request_response::Behaviour::new(dm_protocol, request_response::Config::default());
         let gc_fn = |message: &gossipsub::Message| {
             let mut s = DefaultHasher::new();
             message.data.hash(&mut s);
