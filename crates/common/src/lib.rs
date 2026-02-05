@@ -1,5 +1,5 @@
 pub mod bus;
-mod event;
+pub mod events;
 pub mod service;
 pub mod tracing;
 

@@ -5,7 +5,12 @@ use std::{
     time::Duration,
 };
 
-use common::{MsgBus, service::Service};
+use common::{
+    MsgBus,
+    events::{NetworkEvents, SystemEvents},
+    service::Service,
+};
+use futures::StreamExt;
 use libp2p::{
     PeerId, StreamProtocol, Swarm, Transport, autonat,
     core::upgrade::Version,
@@ -17,13 +22,18 @@ use libp2p::{
     relay::{self},
     request_response, swarm, tcp, yamux,
 };
-use message::pb::chat_dm::direct_message;
+use message::pb::chat_dm::{DirectMessage, Text, direct_message};
 
-use crate::behavior::{self, DmProtobufCodec, MsgBehaviour};
+use crate::{
+    behavior::{self, DmProtobufCodec, MsgBehaviour},
+    handler::P2pSwarmHandler,
+    tcp::NetSendMsg,
+};
 
 pub struct P2PSwarm {
     msg_bus: Arc<MsgBus>,
     swarm: Swarm<MsgBehaviour>,
+    handler: P2pSwarmHandler,
 }
 
 impl P2PSwarm {
@@ -31,6 +41,7 @@ impl P2PSwarm {
         P2PSwarm {
             msg_bus,
             swarm: P2PSwarm::build_swarm(identity).unwrap(),
+            handler: P2pSwarmHandler,
         }
     }
 
@@ -98,14 +109,33 @@ impl P2PSwarm {
 impl Service for P2PSwarm {
     async fn run(self, mut shutdown: tokio::sync::broadcast::Receiver<()>) {
         tracing::info!("P2P Swarm service started");
-        // Placeholder for swarm logic
+        // subscribe to network events
+        tracing.info(bus_event = "NetworkSend");
+        let bus_rx = self.msg_bus.subscribe::<NetworkEvents>().await;
+
+        self.swarm
+            .behaviour_mut()
+            .kad
+            .set_mode(Some(kad::Mode::Server));
         loop {
             tokio::select! {
                 _ = shutdown.recv() => {
                     tracing::info!("P2P Swarm service shutting down");
                     break;
+                },
+                // handle swarm events
+                event = self.swarm.select_next_some() => self.handler.handle_event(event),
+                // handle internal commands (from bus)
+                command = bus_rx.recv()? => {
+                    println!("recv {:?}", command);
+                    if matches!(command, NetworkEvents::SendMsg) {
+                        self.swarm.behaviour_mut().direct_message.send_request(todo!(), DirectMessage {
+                            id: "x1".into(),
+                            timestamp: 2,
+                            payload: Some(Text("hello world"))
+                        });
+                    }
                 }
-                // Add swarm operations here
             }
         }
         tracing::info!("P2P Swarm service stopped");

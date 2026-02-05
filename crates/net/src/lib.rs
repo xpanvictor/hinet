@@ -1,4 +1,5 @@
 mod behavior;
+mod handler;
 mod swarm;
 mod tcp;
 

@@ -12,6 +12,7 @@ use tokio::time::sleep;
 use tokio::{join, select, spawn};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
+#[deprecated]
 pub struct Network {
     msg_bus: Arc<MsgBus>,
 }
@@ -35,7 +36,10 @@ impl Network {
         let listener = TcpListener::bind(address).await.unwrap();
         loop {
             let bus = this.msg_bus.clone();
-            tracing::info!("tcp network listening to peers on {:?}", listener.local_addr().unwrap());
+            tracing::info!(
+                "tcp network listening to peers on {:?}",
+                listener.local_addr().unwrap()
+            );
 
             select! {
                 _ = shutdown.recv() => {
@@ -91,7 +95,7 @@ impl Network {
         bus: Arc<MsgBus>,
         mut shutdown: Receiver<()>,
     ) -> anyhow::Result<()> {
-        let mut rx = bus.subscribe::<NetSendMsg>().await;
+        let mut rx = bus.subscribe::<NetendMsg>().await;
         select! {
             _ = shutdown.recv() => {
                 tracing::debug!("stopping outgoing msgs");

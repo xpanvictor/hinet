@@ -1,0 +1,11 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+message ={ path = "../message"}
+uuid = "1.20.0"
+anyhow = "1.0.100"
+sqlx = { version = "0.8.1", features = ["runtime-tokio", "sqlite", "chrono"] }
+
