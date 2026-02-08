@@ -12,7 +12,7 @@ use common::{
 };
 use futures::StreamExt;
 use libp2p::{
-    PeerId, StreamProtocol, Swarm, Transport, autonat,
+    PeerId, StreamProtocol, Swarm, SwarmBuilder, Transport, autonat,
     core::upgrade::Version,
     dcutr, gossipsub, identify,
     identity::Keypair,
@@ -38,10 +38,11 @@ pub struct P2PSwarm {
 
 impl P2PSwarm {
     pub fn new(identity: Keypair, msg_bus: Arc<MsgBus>) -> Self {
+        let mut swarm = P2PSwarm::build_swarm(identity).unwrap();
         P2PSwarm {
             msg_bus,
-            swarm: P2PSwarm::build_swarm(identity).unwrap(),
-            handler: P2pSwarmHandler,
+            swarm,
+            handler: P2pSwarmHandler::new(&mut swarm, msg_bus),
         }
     }
 
@@ -102,7 +103,16 @@ impl P2PSwarm {
             dcutr,
             relay_client: relay::Behaviour::new(peer_id, relay::Config::default()),
         };
-        todo!()
+        SwarmBuilder::with_existing_identity(kp)
+            .with_tokio()
+            .with_other_transport(transport)
+            .with_behaviour(behavior)?
+    }
+
+    pub fn listen(&self) -> Result<()> {
+        // todo: listen other layers
+        self.swarm.listen_on("ip4/0.0.0.0/tcp/0".parse()?);
+        Ok(())
     }
 }
 
