@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use common::MsgBus;
 use libp2p::{
-    PeerId, Swarm, identify, kad, mdns,
+    PeerId, Swarm, gossipsub, identify, kad, mdns,
     swarm::{SwarmEvent, behaviour::ConnectionEstablished},
 };
 use tracing::warn;
@@ -15,6 +15,7 @@ pub struct P2pSwarmHandler {
     swarm: &mut Swarm<MsgBehaviour>,
 }
 
+// todo: use dial queue to avoid storm dialing
 impl P2pSwarmHandler {
     pub fn new(swarm: &mut Swarm<MsgBehaviour>, msg_bus: Arc<MsgBus>) -> Self {
         Self {
@@ -43,7 +44,17 @@ impl P2pSwarmHandler {
                         if ok.peers.is_empty() {
                             warn!("swarm/kad", "no closest peers found");
                         }
-                        tracing::info!("peers {}", ok.peers)
+                        tracing::info!("peers {}", ok.peers);
+                        // can confirm if target peer but just redial if not conn
+                        for peer_info in ok.peers {
+                            if self.connected_peers.contains(&peer_info.peer_id) {
+                                continue;
+                            }
+                            tracing::info!("Dialing discovered peer: {}", peer_info);
+                            if let Err(err) = self.swarm.dial(peer_info) {
+                                tracing::warn!("swarm/kad", "Dial failed for {}", peer_info)
+                            }
+                        }
                     }
                     _ => {
                         tracing::warn!("swarm/kad", "other results kad")
@@ -64,7 +75,11 @@ impl P2pSwarmHandler {
                         self.swarm.dial(addr)?
                     }
                 }
-                mdns::Event::Expired(peers) => {}
+                mdns::Event::Expired(peers) => {
+                    for (peer, _) in peers {
+                        self.connected_peers.remove(&peer);
+                    }
+                }
             },
             // identify
             SwarmEvent::Behaviour(AppEvent::Identify(identify_ev)) => match identify_ev {
@@ -76,9 +91,21 @@ impl P2pSwarmHandler {
                     // add to kad
                     for addr in info.listen_addrs {
                         self.swarm.behaviour_mut().kad.add_address(&peer_id, addr);
+                        // can store peer_info here
                     }
                 }
                 _ => {}
+            },
+            SwarmEvent::Behaviour(AppEvent::Gossipsub(gsub_ev)) => match gsub_ev {
+                gossipsub::Event::Message {
+                    propagation_source,
+                    message_id,
+                    message,
+                } => {
+                    tracing::info!("swarm/gsub", "message received {}", message)
+                    // here process message, match to appropriate handler
+                }
+                _ => tracing::debug!("swarm/gsub", "unsupported event {}", gsub_ev),
             },
             _ => {}
         }
